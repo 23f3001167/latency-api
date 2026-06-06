@@ -7,7 +7,7 @@ import math
 
 app = FastAPI()
 
-# CORS
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -16,7 +16,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Load JSON file safely
+# Load JSON data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -28,13 +28,16 @@ class RequestBody(BaseModel):
 
 def percentile_95(values):
     values = sorted(values)
-    n = len(values)
 
-    if n == 0:
+    if not values:
         return 0
 
-    k = math.ceil(0.95 * n) - 1
-    return values[k]
+    k = math.ceil(0.95 * len(values)) - 1
+    return round(values[k], 2)
+
+@app.get("/")
+def home():
+    return {"message": "Latency Analytics API Running"}
 
 @app.post("/")
 def analytics(req: RequestBody):
@@ -46,9 +49,9 @@ def analytics(req: RequestBody):
         rows = [r for r in DATA if r["region"] == region]
 
         latencies = [r["latency_ms"] for r in rows]
-        uptimes = [r["uptime"] for r in rows]
+        uptimes = [r["uptime_pct"] for r in rows]
 
-        if len(rows) == 0:
+        if not rows:
             result[region] = {
                 "avg_latency": 0,
                 "p95_latency": 0,
