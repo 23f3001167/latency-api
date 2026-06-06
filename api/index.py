@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pathlib import Path
@@ -7,16 +7,15 @@ import math
 
 app = FastAPI()
 
-# Enable CORS
+# CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=False,
-    allow_methods=["*"],
+    allow_methods=["POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Load JSON data
+# Load data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -38,6 +37,14 @@ def percentile_95(values):
 @app.get("/")
 def home():
     return {"message": "Latency Analytics API Running"}
+
+@app.options("/")
+def options_handler():
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 @app.post("/")
 def analytics(req: RequestBody):
@@ -65,9 +72,16 @@ def analytics(req: RequestBody):
             "p95_latency": percentile_95(latencies),
             "avg_uptime": round(sum(uptimes) / len(uptimes), 2),
             "breaches": sum(
-                1 for x in latencies
-                if x > req.threshold_ms
+                1 for latency in latencies
+                if latency > req.threshold_ms
             )
         }
 
-    return result
+    response = Response(
+        content=json.dumps(result),
+        media_type="application/json"
+    )
+
+    response.headers["Access-Control-Allow-Origin"] = "*"
+
+    return response
