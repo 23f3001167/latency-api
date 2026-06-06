@@ -11,11 +11,11 @@ app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Load data
+# Load telemetry data
 DATA_FILE = Path(__file__).resolve().parent.parent / "q-vercel-latency.json"
 
 with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -31,19 +31,24 @@ def percentile_95(values):
     if not values:
         return 0
 
-    k = math.ceil(0.95 * len(values)) - 1
-    return round(values[k], 2)
+    index = math.ceil(0.95 * len(values)) - 1
+    return round(values[index], 2)
+
+@app.options("/")
+def cors_preflight():
+    response = Response()
+    response.headers["Access-Control-Allow-Origin"] = "*"
+    response.headers["Access-Control-Allow-Methods"] = "*"
+    response.headers["Access-Control-Allow-Headers"] = "*"
+    return response
 
 @app.get("/")
 def home():
-    return {"message": "Latency Analytics API Running"}
-
-@app.options("/")
-def options_handler():
-    response = Response()
+    response = Response(
+        content=json.dumps({"message": "Latency Analytics API Running"}),
+        media_type="application/json"
+    )
     response.headers["Access-Control-Allow-Origin"] = "*"
-    response.headers["Access-Control-Allow-Methods"] = "POST, OPTIONS"
-    response.headers["Access-Control-Allow-Headers"] = "*"
     return response
 
 @app.post("/")
@@ -55,9 +60,6 @@ def analytics(req: RequestBody):
 
         rows = [r for r in DATA if r["region"] == region]
 
-        latencies = [r["latency_ms"] for r in rows]
-        uptimes = [r["uptime_pct"] for r in rows]
-
         if not rows:
             result[region] = {
                 "avg_latency": 0,
@@ -66,6 +68,9 @@ def analytics(req: RequestBody):
                 "breaches": 0
             }
             continue
+
+        latencies = [r["latency_ms"] for r in rows]
+        uptimes = [r["uptime_pct"] for r in rows]
 
         result[region] = {
             "avg_latency": round(sum(latencies) / len(latencies), 2),
